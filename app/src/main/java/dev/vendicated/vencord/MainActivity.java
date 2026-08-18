@@ -13,7 +13,11 @@ import android.webkit.WebView;
 import java.io.IOException;
 import java.util.Objects;
 
-/** Upstream Vendroid + canary.discord.com only */
+/**
+ * Vendroid + Canary.
+ * Desktop User-Agent only → Discord web PC layout (not mobile web).
+ * No DiscordNative stub (that caused white screen).
+ */
 public class MainActivity extends Activity {
     public static final int FILECHOOSER_RESULTCODE = 8485;
     private boolean wvInitialized = false;
@@ -41,7 +45,10 @@ public class MainActivity extends Activity {
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
         s.setAllowFileAccess(true);
-        // Default WebView UA (no desktop spoof — that caused white screen)
+        s.setUseWideViewPort(true);
+        s.setLoadWithOverviewMode(true);
+        // PC web client, not mobile web
+        s.setUserAgentString(Constants.DESKTOP_USER_AGENT);
 
         wv.addJavascriptInterface(new VencordNative(this, wv), "VencordMobileNative");
 
