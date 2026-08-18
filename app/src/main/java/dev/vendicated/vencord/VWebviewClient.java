@@ -10,7 +10,9 @@ import android.webkit.WebViewClient;
 
 import androidx.annotation.Nullable;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.HashMap;
@@ -18,6 +20,9 @@ import java.util.List;
 import java.util.Map;
 
 public class VWebviewClient extends WebViewClient {
+
+    /** Avoid injecting the full Vencord bundle repeatedly (breaks React / settings). */
+    private String lastInjectedUrl = "";
 
     @Override
     public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
@@ -37,79 +42,126 @@ public class VWebviewClient extends WebViewClient {
 
     @Override
     public void onPageStarted(WebView view, String url, Bitmap favicon) {
-        injectVencord(view);
+        // Reset inject guard on full document load
+        lastInjectedUrl = "";
+        injectVencordOnce(view, url);
     }
 
     @Override
     public void onPageFinished(WebView view, String url) {
-        // Re-inject in case SPA navigation dropped scripts
-        injectVencord(view);
+        injectVencordOnce(view, url);
         view.setVisibility(View.VISIBLE);
+        // Light recovery if Discord shows its crash screen
+        view.evaluateJavascript(
+                "(function(){try{"
+                        + "var t=document.body&&document.body.innerText||'';"
+                        + "if(/cessé de fonctionner|stopped working|unexpectedly/i.test(t)){"
+                        + "console.warn('[Vendroid] Discord crash UI detected');"
+                        + "}"
+                        + "}catch(e){}})();",
+                null);
         super.onPageFinished(view, url);
     }
 
-    private void injectVencord(WebView view) {
-        if (HttpClient.VencordRuntime != null) {
-            view.evaluateJavascript(HttpClient.VencordRuntime, null);
-        }
-        if (HttpClient.VencordMobileRuntime != null) {
-            view.evaluateJavascript(HttpClient.VencordMobileRuntime, null);
-        }
+    private void injectVencordOnce(WebView view, String url) {
+        if (url == null) return;
+        // Same document — don't re-run multi‑MB browser.js
+        if (url.equals(lastInjectedUrl)) return;
+        if (HttpClient.VencordRuntime == null) return;
+
+        // Guard inside the page too (SPA navigations)
+        String guard =
+                "(function(){if(window.__VendroidVencordInjected)return true;window.__VendroidVencordInjected=1;return false;})()";
+        view.evaluateJavascript(
+                guard,
+                already -> {
+                    if ("true".equals(already)) {
+                        lastInjectedUrl = url;
+                        return;
+                    }
+                    view.evaluateJavascript(HttpClient.VencordRuntime, null);
+                    if (HttpClient.VencordMobileRuntime != null) {
+                        view.evaluateJavascript(HttpClient.VencordMobileRuntime, null);
+                    }
+                    lastInjectedUrl = url;
+                    Logger.d("Vencord injected for " + url);
+                });
     }
 
     @Nullable
     @Override
     public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest req) {
-        // Strip CSP on main document + CSS so Vencord inject works
-        if (req.isForMainFrame() || (req.getUrl().getPath() != null && req.getUrl().getPath().endsWith(".css"))) {
-            try {
-                return doFetch(req);
-            } catch (IOException ex) {
-                Logger.e("shouldInterceptRequest", ex);
-            }
+        // Only strip CSP on main HTML. Intercepting every CSS is slow and causes lag.
+        if (!req.isForMainFrame()) return null;
+        String path = req.getUrl().getPath();
+        if (path != null && (path.endsWith(".js") || path.endsWith(".json") || path.endsWith(".woff2"))) {
+            return null;
         }
-        return null;
+        try {
+            return doFetchStripCsp(req);
+        } catch (Exception ex) {
+            Logger.e("shouldInterceptRequest", ex);
+            return null; // fall back to WebView default
+        }
     }
 
-    private WebResourceResponse doFetch(WebResourceRequest req) throws IOException {
+    private WebResourceResponse doFetchStripCsp(WebResourceRequest req) throws IOException {
         var url = req.getUrl().toString();
         var conn = (HttpURLConnection) new URL(url).openConnection();
-        conn.setConnectTimeout(15000);
-        conn.setReadTimeout(30000);
-        conn.setRequestMethod(req.getMethod());
+        conn.setConnectTimeout(20000);
+        conn.setReadTimeout(45000);
+        conn.setInstanceFollowRedirects(true);
+        conn.setRequestMethod(req.getMethod() != null ? req.getMethod() : "GET");
+
         Map<String, String> reqHeaders = req.getRequestHeaders();
         if (reqHeaders != null) {
             for (var h : reqHeaders.entrySet()) {
+                // Let HttpURLConnection manage compression
+                if ("accept-encoding".equalsIgnoreCase(h.getKey())) continue;
                 conn.setRequestProperty(h.getKey(), h.getValue());
             }
         }
+        // Match desktop client
+        conn.setRequestProperty("User-Agent", Constants.DESKTOP_USER_AGENT);
 
         int code = conn.getResponseCode();
         String msg = conn.getResponseMessage() != null ? conn.getResponseMessage() : "OK";
+        if (code < 100) code = 200;
 
         Map<String, List<String>> headers = conn.getHeaderFields();
         Map<String, String> modified = new HashMap<>();
         if (headers != null) {
             for (var header : headers.entrySet()) {
                 if (header.getKey() == null) continue;
-                if ("Content-Security-Policy".equalsIgnoreCase(header.getKey())) continue;
-                if ("Content-Security-Policy-Report-Only".equalsIgnoreCase(header.getKey())) continue;
+                String key = header.getKey();
+                if ("Content-Security-Policy".equalsIgnoreCase(key)) continue;
+                if ("Content-Security-Policy-Report-Only".equalsIgnoreCase(key)) continue;
+                // Avoid conflicting length after any transform
+                if ("Content-Length".equalsIgnoreCase(key)) continue;
                 if (header.getValue() != null && !header.getValue().isEmpty()) {
-                    modified.put(header.getKey(), header.getValue().get(0));
+                    modified.put(key, header.getValue().get(0));
                 }
             }
         }
-        if (url.endsWith(".css")) modified.put("Content-Type", "text/css");
 
         String mime = modified.getOrDefault("Content-Type", "text/html");
-        if (mime.contains(";")) mime = mime.substring(0, mime.indexOf(';')).trim();
+        String encoding = "utf-8";
+        if (mime.contains(";")) {
+            String[] parts = mime.split(";");
+            mime = parts[0].trim();
+            for (String p : parts) {
+                p = p.trim();
+                if (p.toLowerCase().startsWith("charset=")) {
+                    encoding = p.substring(8).trim().replace("\"", "");
+                }
+            }
+        }
 
-        return new WebResourceResponse(
-                mime,
-                "utf-8",
-                code,
-                msg,
-                modified,
-                code >= 400 ? conn.getErrorStream() : conn.getInputStream());
+        InputStream stream = code >= 400 ? conn.getErrorStream() : conn.getInputStream();
+        if (stream == null) {
+            stream = new ByteArrayInputStream(new byte[0]);
+        }
+
+        return new WebResourceResponse(mime, encoding, code, msg, modified, stream);
     }
 }

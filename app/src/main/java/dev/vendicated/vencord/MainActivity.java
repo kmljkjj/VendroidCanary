@@ -5,6 +5,7 @@ import android.app.Activity;
 import android.content.Intent;
 import android.graphics.Color;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.view.KeyEvent;
 import android.view.View;
@@ -39,19 +40,24 @@ public class MainActivity extends Activity {
         wv.setWebChromeClient(new VChromeClient(this));
         wv.addJavascriptInterface(new VencordNative(this, wv), "VencordMobileNative");
 
-        // Show WebView only after Vencord is fetched (avoids flash without mods)
         wv.setVisibility(View.INVISIBLE);
 
         HttpClient.fetchVencordAsync(
                 this,
                 this::loadDiscord,
-                () -> Toast.makeText(this, "Failed to download Vencord", Toast.LENGTH_LONG).show());
+                () -> Toast.makeText(
+                                this,
+                                "Impossible de télécharger Vencord. Réessaie.",
+                                Toast.LENGTH_LONG)
+                        .show());
     }
 
     private void setupWindow() {
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
         getWindow().setStatusBarColor(Color.parseColor("#1E1F22"));
         getWindow().setNavigationBarColor(Color.parseColor("#1E1F22"));
+        // Keep screen responsive; Discord is heavy
+        getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -68,14 +74,23 @@ public class MainActivity extends Activity {
         s.setCacheMode(WebSettings.LOAD_DEFAULT);
         s.setMixedContentMode(WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE);
         s.setOffscreenPreRaster(true);
-        s.setSafeBrowsingEnabled(true);
+        s.setSafeBrowsingEnabled(false);
+        s.setJavaScriptCanOpenWindowsAutomatically(false);
+        s.setSupportMultipleWindows(false);
+        s.setGeolocationEnabled(false);
+        s.setTextZoom(100);
 
-        // Prefer desktop-ish layout less; Discord web detects mobile UA
-        // Keep default UA — changing it often breaks Discord web
+        // Critical: desktop UA → full Discord client (settings work)
+        s.setUserAgentString(Constants.DESKTOP_USER_AGENT);
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            s.setForceDark(WebSettings.FORCE_DARK_OFF);
+        }
 
         webView.setLayerType(View.LAYER_TYPE_HARDWARE, null);
         webView.setOverScrollMode(View.OVER_SCROLL_NEVER);
         webView.setNestedScrollingEnabled(true);
+        webView.setScrollBarStyle(View.SCROLLBARS_INSIDE_OVERLAY);
 
         CookieManager cookies = CookieManager.getInstance();
         cookies.setAcceptCookie(true);
@@ -113,12 +128,14 @@ public class MainActivity extends Activity {
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
         if (keyCode == KeyEvent.KEYCODE_BACK && wv != null) {
-            wv.evaluateJavascript("VencordMobile && VencordMobile.onBackPress ? VencordMobile.onBackPress() : false", r -> {
-                if ("false".equals(r) || "null".equals(r)) {
-                    if (wv.canGoBack()) wv.goBack();
-                    else finish();
-                }
-            });
+            wv.evaluateJavascript(
+                    "(function(){try{if(window.VencordMobile&&VencordMobile.onBackPress){return!!VencordMobile.onBackPress();}return false;}catch(e){return false;}})()",
+                    r -> {
+                        if ("false".equals(r) || "null".equals(r)) {
+                            if (wv.canGoBack()) wv.goBack();
+                            else finish();
+                        }
+                    });
             return true;
         }
         return super.onKeyDown(keyCode, event);
