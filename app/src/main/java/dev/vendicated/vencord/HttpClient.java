@@ -10,15 +10,8 @@ import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.Locale;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
-public final class HttpClient {
-    public static String VencordRuntime;
-    public static String VencordMobileRuntime;
-
-    private static final ExecutorService IO = Executors.newSingleThreadExecutor();
-
+public class HttpClient {
     public static final class HttpException extends IOException {
         private final HttpURLConnection conn;
         private String message;
@@ -40,28 +33,18 @@ public final class HttpClient {
                             conn.getURL().toString(),
                             es != null ? readAsText(es) : "");
                 } catch (IOException ex) {
-                    message = "HTTP error; url=" + conn.getURL();
+                    message = "Error while building message. Url is " + conn.getURL().toString();
                 }
             }
             return message;
         }
     }
 
-    /** Fetch Vencord on a background thread, then run callback on UI thread. */
-    public static void fetchVencordAsync(Activity activity, Runnable onSuccess, Runnable onError) {
-        IO.execute(() -> {
-            try {
-                fetchVencord(activity);
-                activity.runOnUiThread(onSuccess);
-            } catch (IOException e) {
-                Logger.e("Failed to fetch Vencord", e);
-                activity.runOnUiThread(onError);
-            }
-        });
-    }
+    public static String VencordRuntime;
+    public static String VencordMobileRuntime;
 
-    public static synchronized void fetchVencord(Activity activity) throws IOException {
-        if (VencordRuntime != null && VencordMobileRuntime != null) return;
+    public static void fetchVencord(Activity activity) throws IOException {
+        if (VencordRuntime != null) return;
 
         var res = activity.getResources();
         try (var is = res.openRawResource(R.raw.vencord_mobile)) {
@@ -72,28 +55,24 @@ public final class HttpClient {
         try (var is = conn.getInputStream()) {
             VencordRuntime = readAsText(is);
         }
-        Logger.d("Vencord runtime loaded (" + VencordRuntime.length() + " chars)");
     }
 
     private static HttpURLConnection fetch(String url) throws IOException {
         var conn = (HttpURLConnection) new URL(url).openConnection();
-        conn.setConnectTimeout(20000);
-        conn.setReadTimeout(60000);
-        conn.setRequestProperty("User-Agent", "VendroidCanary/1.1");
-        conn.setInstanceFollowRedirects(true);
         if (conn.getResponseCode() >= 300) {
             throw new HttpException(conn);
         }
         return conn;
     }
 
-    static String readAsText(InputStream is) throws IOException {
+    private static String readAsText(InputStream is) throws IOException {
         try (var baos = new ByteArrayOutputStream()) {
-            byte[] buf = new byte[32768];
             int n;
+            byte[] buf = new byte[16384];
             while ((n = is.read(buf)) > -1) {
                 baos.write(buf, 0, n);
             }
+            baos.flush();
             return baos.toString("UTF-8");
         }
     }
