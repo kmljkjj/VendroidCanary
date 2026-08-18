@@ -10,6 +10,22 @@
         Common.FluxDispatcher.subscribe("MOBILE_WEB_SIDEBAR_CLOSE", () => {
             isSidebarOpen = false;
         });
+
+        // Auto-enable Experiments: unlock Discord experiment panel + force variants client-side
+        try {
+            const settings = Vencord.Settings;
+            if (settings?.plugins) {
+                if (!settings.plugins.Experiments) settings.plugins.Experiments = {};
+                settings.plugins.Experiments.enabled = true;
+            }
+            const plug = Vencord.Plugins?.plugins?.Experiments;
+            if (plug && typeof Vencord.Plugins.startPlugin === "function" && !plug.started) {
+                Vencord.Plugins.startPlugin(plug);
+            }
+            console.log("[VendroidCanary] Experiments plugin enabled");
+        } catch (e) {
+            console.warn("[VendroidCanary] Could not auto-enable Experiments", e);
+        }
     });
 
     window.VencordMobile = {
