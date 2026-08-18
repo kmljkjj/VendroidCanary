@@ -16,8 +16,10 @@ public class VencordNative {
     @JavascriptInterface
     public void goBack() {
         activity.runOnUiThread(() -> {
-            if (webView.canGoBack()) webView.goBack();
-            else activity.finish();
+            if (webView.canGoBack())
+                webView.goBack();
+            else
+                activity.finish();
         });
     }
 }

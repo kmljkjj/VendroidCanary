@@ -3,23 +3,24 @@ package dev.vendicated.vencord;
 import android.util.Log;
 
 public final class Logger {
-    private static final String TAG = "VendroidCanary";
+    private static final String TAG = "Vencord";
 
-    private Logger() {}
-
-    public static void d(String msg) {
-        Log.d(TAG, msg);
+    public static void e(String message) {
+        Log.e(TAG, message);
+    }
+    public static void e(String message, Throwable e) {
+        Log.e(TAG, message, e);
     }
 
-    public static void e(String msg) {
-        Log.e(TAG, msg);
+    public static void w(String message) {
+        Log.w(TAG, message);
     }
 
-    public static void e(String msg, Throwable t) {
-        Log.e(TAG, msg, t);
+    public static void i(String message) {
+        Log.i(TAG, message);
     }
 
-    public static void w(String msg) {
-        Log.w(TAG, msg);
+    public static void d(String message) {
+        Log.d(TAG, message);
     }
 }

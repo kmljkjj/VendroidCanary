@@ -4,9 +4,7 @@ import android.app.Activity;
 
 import androidx.annotation.NonNull;
 
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
+import java.io.*;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.Locale;
@@ -31,9 +29,10 @@ public class HttpClient {
                             conn.getResponseCode(),
                             conn.getResponseMessage(),
                             conn.getURL().toString(),
-                            es != null ? readAsText(es) : "");
+                            es != null ? readAsText(es) : ""
+                    );
                 } catch (IOException ex) {
-                    message = "Error while building message. Url is " + conn.getURL().toString();
+                    message = "Error while building message lmao. Url is " + conn.getURL().toString();
                 }
             }
             return message;
