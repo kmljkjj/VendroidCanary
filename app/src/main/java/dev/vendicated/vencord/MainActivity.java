@@ -13,7 +13,7 @@ import android.webkit.WebView;
 import java.io.IOException;
 import java.util.Objects;
 
-/** Vendroid + Canary + desktop UA (PC experiment UI on web when possible) */
+/** Upstream Vendroid + canary.discord.com only */
 public class MainActivity extends Activity {
     public static final int FILECHOOSER_RESULTCODE = 8485;
     private boolean wvInitialized = false;
@@ -41,8 +41,7 @@ public class MainActivity extends Activity {
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
         s.setAllowFileAccess(true);
-        // Desktop site → more PC experiment surfaces
-        s.setUserAgentString(Constants.DESKTOP_USER_AGENT);
+        // Default WebView UA (no desktop spoof — that caused white screen)
 
         wv.addJavascriptInterface(new VencordNative(this, wv), "VencordMobileNative");
 
