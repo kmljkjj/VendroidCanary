@@ -54,7 +54,7 @@ public class MainActivity extends Activity {
         Intent intent = getIntent();
         if (Objects.equals(intent.getAction(), Intent.ACTION_VIEW)) {
             Uri data = intent.getData();
-            if (data != null) handleUrl(intent.getData());
+            if (data != null) handleUrl(data);
         } else {
             wv.loadUrl("https://canary.discord.com/app");
         }

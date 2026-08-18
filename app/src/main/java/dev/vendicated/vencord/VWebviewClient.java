@@ -15,7 +15,7 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.HashMap;
 
-/** Upstream Vendroid — also allow canary.discord.com */
+/** Upstream Vendroid + canary.discord.com */
 public class VWebviewClient extends WebViewClient {
     @Override
     public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
@@ -47,7 +47,7 @@ public class VWebviewClient extends WebViewClient {
     @Nullable
     @Override
     public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest req) {
-        if (req.isForMainFrame() || req.getUrl().getPath().endsWith(".css")) {
+        if (req.isForMainFrame() || (req.getUrl().getPath() != null && req.getUrl().getPath().endsWith(".css"))) {
             try {
                 return doFetch(req);
             } catch (IOException ex) {
@@ -69,10 +69,12 @@ public class VWebviewClient extends WebViewClient {
         var msg = conn.getResponseMessage();
 
         var headers = conn.getHeaderFields();
-        var modifiedHeaders = new HashMap<String, String>(headers.size());
+        var modifiedHeaders = new HashMap<String, String>();
         for (var header : headers.entrySet()) {
             if (header.getKey() != null && !"Content-Security-Policy".equalsIgnoreCase(header.getKey())) {
-                modifiedHeaders.put(header.getKey(), header.getValue().get(0));
+                if (header.getValue() != null && !header.getValue().isEmpty()) {
+                    modifiedHeaders.put(header.getKey(), header.getValue().get(0));
+                }
             }
         }
         if (url.endsWith(".css")) modifiedHeaders.put("Content-Type", "text/css");
