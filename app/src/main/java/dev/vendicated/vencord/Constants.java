@@ -1,5 +1,17 @@
 package dev.vendicated.vencord;
 
 public class Constants {
-    public static final String JS_BUNDLE_URL = "https://github.com/Vendicated/Vencord/releases/download/devbuild/browser.js";
+    public static final String JS_BUNDLE_URL =
+            "https://github.com/Vendicated/Vencord/releases/download/devbuild/browser.js";
+
+    /** Discord Canary */
+    public static final String DISCORD_APP_URL = "https://canary.discord.com/app";
+
+    /**
+     * Desktop Chrome UA — Discord serves / enables more "desktop" experiment UI.
+     * Features that need real Electron native modules still will not work.
+     */
+    public static final String DESKTOP_USER_AGENT =
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                    + "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
 }

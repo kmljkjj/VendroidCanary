@@ -13,7 +13,7 @@ import android.webkit.WebView;
 import java.io.IOException;
 import java.util.Objects;
 
-/** Upstream Vendroid, only discord.com → canary.discord.com */
+/** Vendroid + Canary + desktop UA (PC experiment UI on web when possible) */
 public class MainActivity extends Activity {
     public static final int FILECHOOSER_RESULTCODE = 8485;
     private boolean wvInitialized = false;
@@ -41,6 +41,8 @@ public class MainActivity extends Activity {
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
         s.setAllowFileAccess(true);
+        // Desktop site → more PC experiment surfaces
+        s.setUserAgentString(Constants.DESKTOP_USER_AGENT);
 
         wv.addJavascriptInterface(new VencordNative(this, wv), "VencordMobileNative");
 
@@ -56,7 +58,7 @@ public class MainActivity extends Activity {
             Uri data = intent.getData();
             if (data != null) handleUrl(data);
         } else {
-            wv.loadUrl("https://canary.discord.com/app");
+            wv.loadUrl(Constants.DISCORD_APP_URL);
         }
 
         wvInitialized = true;
